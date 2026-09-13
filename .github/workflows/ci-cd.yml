@@ -1,0 +1,102 @@
+name: CI/CD
+
+# Every push and pull request runs the checks. Pushes to main then deploy, but each deploy
+# only runs once it is switched on with a repository variable (Settings → Secrets and
+# variables → Actions → Variables):
+#   ENABLE_CLOUDFLARE_DEPLOY = true   → real site on Cloudflare
+#                                       (needs secrets CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID)
+#   ENABLE_GITHUB_PAGES      = true   → demo on GitHub Pages
+#                                       (Settings → Pages → Source: GitHub Actions)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel superseded PR runs, but never interrupt a deploy on main.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  BUN_VERSION: 1.4.2
+
+jobs:
+  check:
+    name: Lint, type-check and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bunx tsc --noEmit
+      - run: bun run build
+
+  deploy-cloudflare:
+    name: Deploy site to Cloudflare
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.ENABLE_CLOUDFLARE_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - name: Build for Cloudflare Workers
+        run: bun run build
+      - name: Deploy with Wrangler
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          packageManager: bun
+          command: deploy --config .output/server/wrangler.json
+
+  build-github-pages:
+    name: Build demo for GitHub Pages
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.ENABLE_GITHUB_PAGES == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - name: Build static site
+        env:
+          STATIC_BUILD: "true"
+          BASE_PATH: /${{ github.event.repository.name }}/
+        run: bun run build
+      - name: Prepare demo output
+        run: |
+          # Demo only: keep search engines out so it never competes with the real site.
+          printf 'User-agent: *\nDisallow: /\n' > dist/client/robots.txt
+          # Unknown URLs load the app, whose router shows the not-found page.
+          cp dist/client/index.html dist/client/404.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/client
+
+  deploy-github-pages:
+    name: Deploy demo to GitHub Pages
+    needs: build-github-pages
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

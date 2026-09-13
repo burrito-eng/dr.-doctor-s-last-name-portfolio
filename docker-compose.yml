@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount the source so edits on your machine hot-reload in the container
+      - .:/app
+      # Keep the container's node_modules instead of the (empty) host folder
+      - /app/node_modules
+    environment:
+      # File watching over Docker Desktop mounts on macOS needs polling
+      - CHOKIDAR_USEPOLLING=true

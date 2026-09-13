@@ -1,9 +1,9 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
-  createRootRouteWithContext,
+  createRootRoute,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -72,19 +72,20 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Dr. Julian Vane | Nephrologist & Hypertension Specialist" },
-      { name: "description", content: "Book a consultation with Dr. Julian Vane, a board-certified nephrologist specializing in kidney health, chronic kidney disease, and hypertension." },
-      { name: "author", content: "Dr. Julian Vane" },
-      { property: "og:title", content: "Dr. Julian Vane | Nephrologist & Hypertension Specialist" },
-      { property: "og:description", content: "Book a consultation with Dr. Julian Vane, a board-certified nephrologist specializing in kidney health, chronic kidney disease, and hypertension." },
+      { title: "Νεφρολογία" },
+      { name: "description", content: "Ιατρός Νεφρολογίας: εμπειρία, εκπαίδευση και επικοινωνία." },
+      { property: "og:title", content: "Νεφρολογία" },
+      {
+        property: "og:description",
+        content: "Ιατρός Νεφρολογίας: εμπειρία, εκπαίδευση και επικοινωνία.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@DrJulianVane" },
     ],
     links: [
       {
@@ -104,7 +105,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Inter:wght@300;400;500;600&display=swap",
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: `${import.meta.env.BASE_URL}favicon.svg`, type: "image/svg+xml" },
     ],
   }),
   shellComponent: RootShell,
@@ -114,8 +115,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const lang = pathname === "/en" || pathname.startsWith("/en/") ? "en" : "el";
+
   return (
-    <html lang="en">
+    <html lang={lang}>
       <head>
         <HeadContent />
       </head>
@@ -128,12 +132,6 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-    </QueryClientProvider>
-  );
+  // Required: nested routes render here. Removing <Outlet /> breaks all child routes.
+  return <Outlet />;
 }

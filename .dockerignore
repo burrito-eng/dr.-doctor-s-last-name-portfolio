@@ -1,0 +1,10 @@
+node_modules
+.git
+dist
+dist-ssr
+.output
+.nitro
+.tanstack
+.wrangler
+.DS_Store
+*.log
